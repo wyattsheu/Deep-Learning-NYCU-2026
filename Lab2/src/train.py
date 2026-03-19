@@ -33,7 +33,7 @@ def train():
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=BATCH_SIZE,
+        batch_size=Batch_size,
         shuffle=True,
         num_workers=2,  # 開啟多執行緒幫忙搬資料 (Colab 免費版建議設 2)
         pin_memory=True,  # 讓資料直通 GPU 記憶體，傳輸更快
