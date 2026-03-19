@@ -155,6 +155,25 @@ def validate_submission_rows(rows, expected_ids):
     return issues
 
 
+def normalize_state_dict_for_loading(checkpoint):
+    """Extract and normalize a checkpoint to plain model state_dict keys."""
+    if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+        state_dict = checkpoint["state_dict"]
+    else:
+        state_dict = checkpoint
+
+    if not isinstance(state_dict, dict):
+        raise TypeError("Unsupported checkpoint format: expected a state_dict dict.")
+
+    normalized = {}
+    for key, value in state_dict.items():
+        if key.startswith("_orig_mod."):
+            normalized[key[len("_orig_mod.") :]] = value
+        else:
+            normalized[key] = value
+    return normalized
+
+
 def run_inference(args):
     model_type = args.model_type
     model_path = args.model_path or f"saved_models/best_{model_type}.pth"
@@ -184,7 +203,8 @@ def run_inference(args):
             f"Model checkpoint not found: {model_path}. Please train first."
         )
 
-    state_dict = torch.load(model_path, map_location=device)
+    checkpoint = torch.load(model_path, map_location=device)
+    state_dict = normalize_state_dict_for_loading(checkpoint)
     model.load_state_dict(state_dict)
     model.eval()
 

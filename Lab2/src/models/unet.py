@@ -39,7 +39,8 @@ class UNet(nn.Module):
         return skip[:, :, dh : dh + th, dw : dw + tw]
 
     def forward(self, x):
-        # Paper-style U-Net: valid conv shrinks feature maps, so skip maps need center crop.
+        # With padding=1, Conv output keeps size the same as input.
+        # So we can just directly concatenate the outputs without cropping.
         l1 = self.left1(x)
         l2 = self.left2(self.pool(l1))
         l3 = self.left3(self.pool(l2))
@@ -47,20 +48,16 @@ class UNet(nn.Module):
         b = self.button(self.pool(l4))
 
         r1 = self.right1_conv(b)
-        l4_crop = self._center_crop(l4, r1)
-        r1 = self.right1(torch.cat([r1, l4_crop], dim=1))
+        r1 = self.right1(torch.cat([r1, l4], dim=1))
 
         r2 = self.right2_conv(r1)
-        l3_crop = self._center_crop(l3, r2)
-        r2 = self.right2(torch.cat([r2, l3_crop], dim=1))
+        r2 = self.right2(torch.cat([r2, l3], dim=1))
 
         r3 = self.right3_conv(r2)
-        l2_crop = self._center_crop(l2, r3)
-        r3 = self.right3(torch.cat([r3, l2_crop], dim=1))
+        r3 = self.right3(torch.cat([r3, l2], dim=1))
 
         r4 = self.right4_conv(r3)
-        l1_crop = self._center_crop(l1, r4)
-        r4 = self.right4(torch.cat([r4, l1_crop], dim=1))
+        r4 = self.right4(torch.cat([r4, l1], dim=1))
 
         output = self.output(r4)
         return output
@@ -70,9 +67,11 @@ class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(DoubleConv, self).__init__()
         self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=0),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=0),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
         )
 

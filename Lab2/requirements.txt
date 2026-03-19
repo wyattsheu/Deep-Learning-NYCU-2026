@@ -4,3 +4,4 @@ Pillow
 numpy
 tqdm
 matplotlib
+albumentations

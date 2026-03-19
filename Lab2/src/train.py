@@ -82,22 +82,10 @@ def train():
     print(f"training by {modlle_type} model")
 
     bce_loss_fn = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(model.parameters(), lr=Learning_rate)
-    try:
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode="max",
-            patience=3,
-            factor=0.5,
-            verbose=True,
-        )
-    except TypeError:
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode="max",
-            patience=3,
-            factor=0.5,
-        )
+    optimizer = optim.AdamW(model.parameters(), lr=Learning_rate, weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=Epochs, eta_min=1e-6
+    )
 
     amp_enabled = use_cuda
     if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
@@ -111,6 +99,8 @@ def train():
     save_dir = os.path.join(project_root, "saved_models")
     os.makedirs(save_dir, exist_ok=True)
     best_dice = 0.0
+    epochs_no_improve = 0
+    early_stop_patience = 10
 
     for epoch in range(Epochs):
         model.train()
@@ -134,7 +124,8 @@ def train():
                 out = model(image)
                 bce_loss = bce_loss_fn(out, mask)
                 dice_loss = dice_loss_from_logits(out, mask)
-                loss = 0.5 * bce_loss + 0.5 * dice_loss
+                # 調整 Loss 權重：0.2 BCE + 0.8 Dice
+                loss = 0.2 * bce_loss + 0.8 * dice_loss
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -151,13 +142,20 @@ def train():
             f"Epoch [{epoch+1}/{Epochs}] - Train Loss: {avg_train_loss:.4f} | Val Dice Score: {val_dice:.4f}"
         )
 
-        scheduler.step(val_dice)
+        scheduler.step()  # 更新 CosineAnnealingLR
 
         if val_dice > best_dice:
             best_dice = val_dice
+            epochs_no_improve = 0
             save_path = os.path.join(save_dir, f"best_{modlle_type}.pth")
             torch.save(model.state_dict(), save_path)
             print(f"new modle save at {save_path}\n")
+        else:
+            epochs_no_improve += 1
+            print(f"No improvement for {epochs_no_improve} epoch(s).\n")
+            if epochs_no_improve >= early_stop_patience:
+                print("Early stopping triggered. Training stopped.")
+                break
 
 
 if __name__ == "__main__":
