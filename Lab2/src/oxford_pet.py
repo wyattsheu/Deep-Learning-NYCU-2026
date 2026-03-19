@@ -8,10 +8,14 @@ import torchvision.transforms as T
 
 class OxfordPetDataset(Dataset):
     def __init__(self, data_dir, split_type, transform=None):
-        self.data_dir = data_dir
+        self.data_dir = os.path.abspath(data_dir)
         self.split_type = split_type
 
-        with open(os.path.join(data_dir, f"{split_type}.txt"), "r") as f:
+        split_file = os.path.join(os.path.dirname(self.data_dir), f"{split_type}.txt")
+        if not os.path.exists(split_file):
+            raise FileNotFoundError(f"Split file not found: {split_file}")
+
+        with open(split_file, "r") as f:
             self.names = [line.strip() for line in f.readlines()]
 
         self.transform = transform or T.Compose([T.Resize((256, 256)), T.ToTensor()])

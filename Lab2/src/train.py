@@ -26,8 +26,8 @@ def train():
     Learning_rate = 0.001
     modlle_type = "UNet"  # 可選擇 "UNet" 或 "ResNet34_UNet"
 
-
-    data_dir = "dataset/oxford-iiit-pet"
+    project_root = os.path.abspath(os.getcwd())
+    data_dir = os.path.join(project_root, "dataset", "oxford-iiit-pet")
     train_dataset = OxfordPetDataset(data_dir, split_type="train")
     val_dataset = OxfordPetDataset(data_dir, split_type="val")
 
@@ -51,7 +51,8 @@ def train():
     CrossEntropy_Loss = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=Learning_rate)
 
-    os.makedirs("saved_models", exist_ok=True)
+    save_dir = os.path.join(project_root, "saved_models")
+    os.makedirs(save_dir, exist_ok=True)
     best_dice = 0.0
 
     for epoch in range(Epochs):
@@ -83,7 +84,7 @@ def train():
 
         if val_dice > best_dice:
             best_dice = val_dice
-            save_path = f"saved_models/best_{modlle_type}.pth"
+            save_path = os.path.join(save_dir, f"best_{modlle_type}.pth")
             torch.save(model.state_dict(), save_path)
             print(f"new modle save at {save_path}\n")
 
