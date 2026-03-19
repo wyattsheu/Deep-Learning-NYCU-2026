@@ -12,6 +12,20 @@ from models.resnet34_unet import ResNet34_UNet
 from evaluate import evaluate
 
 
+def dice_loss_from_logits(logits, targets, smooth=1.0):
+    probs = torch.sigmoid(logits).float()
+    targets = targets.float()
+
+    probs = probs.view(probs.size(0), -1)
+    targets = targets.view(targets.size(0), -1)
+
+    intersection = (probs * targets).sum(dim=1)
+    dice = (2.0 * intersection + smooth) / (
+        probs.sum(dim=1) + targets.sum(dim=1) + smooth
+    )
+    return 1.0 - dice.mean()
+
+
 def train():
     """
     TODO:
@@ -67,8 +81,24 @@ def train():
     print(f"device: {device}")
     print(f"training by {modlle_type} model")
 
-    CrossEntropy_Loss = nn.BCEWithLogitsLoss()
+    bce_loss_fn = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=Learning_rate)
+    try:
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="max",
+            patience=3,
+            factor=0.5,
+            verbose=True,
+        )
+    except TypeError:
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="max",
+            patience=3,
+            factor=0.5,
+        )
+
     amp_enabled = use_cuda
     if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
         try:
@@ -102,7 +132,9 @@ def train():
 
             with autocast_context:
                 out = model(image)
-                loss = CrossEntropy_Loss(out, mask)
+                bce_loss = bce_loss_fn(out, mask)
+                dice_loss = dice_loss_from_logits(out, mask)
+                loss = 0.5 * bce_loss + 0.5 * dice_loss
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -118,6 +150,8 @@ def train():
         print(
             f"Epoch [{epoch+1}/{Epochs}] - Train Loss: {avg_train_loss:.4f} | Val Dice Score: {val_dice:.4f}"
         )
+
+        scheduler.step(val_dice)
 
         if val_dice > best_dice:
             best_dice = val_dice
