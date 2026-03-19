@@ -37,7 +37,7 @@ def train():
     6. 儲存驗證集表現最好的模型權重到 saved_models/。
     """
     Epochs = 100
-    Batch_size = 8
+    Batch_size = 4
     Learning_rate = 1e-4
     modlle_type = "UNet"  # 可選擇 "UNet" 或 "ResNet34_UNet"
 
@@ -57,6 +57,8 @@ def train():
     if use_cuda:
         torch.backends.cudnn.benchmark = True
 
+    amp_enabled = device.type == "cuda"  # Only enable AMP for CUDA
+    
     train_loader = DataLoader(
         train_dataset,
         batch_size=Batch_size,
@@ -88,7 +90,6 @@ def train():
         optimizer, T_max=Epochs, eta_min=1e-6
     )
 
-    amp_enabled = use_cuda
     if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
         try:
             scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)

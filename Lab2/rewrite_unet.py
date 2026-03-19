@@ -1,4 +1,5 @@
-import torch
+import os
+content = """import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import ConvTranspose2d
@@ -7,10 +8,10 @@ from torch.nn import ConvTranspose2d
 class UNet(nn.Module):
     def __init__(self, in_channels=3, out_channels=1):
         super(UNet, self).__init__()
-        """
+        \"\"\"
         TODO: 從零開始 (From scratch) 搭建 UNet 的 Encoder, Bottleneck, 與 Decoder。
         不可載入任何預訓練權重。
-        """
+        \"\"\"
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self.left1 = DoubleConv(in_channels, 64)
@@ -83,3 +84,7 @@ class DoubleConv(nn.Module):
 
     def forward(self, x):
         return self.double_conv(x)
+"""
+
+with open("/Users/wyattsheu/Downloads/Deep-Learning-NYCU-2026/Lab2/src/models/unet.py", "w") as f:
+    f.write(content)
