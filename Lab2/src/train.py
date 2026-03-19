@@ -71,12 +71,13 @@ def train():
     else:
         model = ResNet34_UNet().to(device)
 
-    if hasattr(torch, "compile"):
-        try:
-            model = torch.compile(model, mode="reduce-overhead")
-            print("torch.compile enabled")
-        except Exception as e:
-            print(f"torch.compile skipped: {e}")
+    # torch.compile will be skipped due to Dynamo issues with current tensor shape combinations
+    # if hasattr(torch, "compile"):
+    #     try:
+    #         model = torch.compile(model, mode="reduce-overhead")
+    #         print("torch.compile enabled")
+    #     except Exception as e:
+    #         print(f"torch.compile skipped: {e}")
 
     print(f"device: {device}")
     print(f"training by {modlle_type} model")
