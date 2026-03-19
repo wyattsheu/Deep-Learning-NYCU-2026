@@ -22,7 +22,7 @@ def train():
     6. 儲存驗證集表現最好的模型權重到 saved_models/。
     """
     Epochs = 100
-    Batch_size = 16
+    Batch_size = 32
     Learning_rate = 0.001
     modlle_type = "UNet"  # 可選擇 "UNet" 或 "ResNet34_UNet"
 
@@ -31,7 +31,13 @@ def train():
     train_dataset = OxfordPetDataset(data_dir, split_type="train")
     val_dataset = OxfordPetDataset(data_dir, split_type="val")
 
-    train_loader = DataLoader(train_dataset, batch_size=Batch_size, shuffle=True)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        num_workers=2,  # 開啟多執行緒幫忙搬資料 (Colab 免費版建議設 2)
+        pin_memory=True,  # 讓資料直通 GPU 記憶體，傳輸更快
+    )
     val_loader = DataLoader(val_dataset, batch_size=Batch_size, shuffle=False)
 
     device = torch.device(
