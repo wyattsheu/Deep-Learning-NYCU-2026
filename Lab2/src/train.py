@@ -69,7 +69,7 @@ def train():
     CrossEntropy_Loss = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=Learning_rate)
     amp_enabled = use_cuda
-    scaler = torch.amp.GradScaler(enabled=amp_enabled)
+    scaler = torch.cuda.amp.GradScaler(enabled=amp_enabled)
 
     save_dir = os.path.join(project_root, "saved_models")
     os.makedirs(save_dir, exist_ok=True)
@@ -86,7 +86,7 @@ def train():
             mask = mask.to(device, non_blocking=use_cuda)
 
             optimizer.zero_grad(set_to_none=True)
-            with torch.amp.autocast(enabled=amp_enabled):
+            with torch.cuda.amp.autocast(enabled=amp_enabled):
                 out = model(image)
                 loss = CrossEntropy_Loss(out, mask)
 
