@@ -22,7 +22,7 @@ def train():
     6. 儲存驗證集表現最好的模型權重到 saved_models/。
     """
     Epochs = 100
-    Batch_size = 8
+    Batch_size = 16
     Learning_rate = 1e-4
     modlle_type = "UNet"  # 可選擇 "UNet" 或 "ResNet34_UNet"
 
