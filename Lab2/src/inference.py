@@ -13,9 +13,19 @@ from models.resnet34_unet import ResNet34_UNet
 from models.unet import UNet
 from utils import (
     calculate_dice_score,
-    visualize_predictions,
     visualize_predictions_grid,
 )
+
+
+INPUT_SIZE = (572, 572)
+TARGET_SIZE = (388, 388)
+
+
+def center_crop_mask(mask: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
+    h, w = mask.shape
+    top = (h - target_h) // 2
+    left = (w - target_w) // 2
+    return mask[top : top + target_h, left : left + target_w]
 
 
 def rle_encode(mask: np.ndarray) -> str:
@@ -76,7 +86,7 @@ class OxfordPetInferenceDataset(Dataset):
         self.data_dir = os.path.abspath(data_dir)
         self.image_ids = image_ids
         self.load_gt = load_gt
-        self.transform = T.Compose([T.Resize((256, 256)), T.ToTensor()])
+        self.transform = T.Compose([T.Resize(INPUT_SIZE), T.ToTensor()])
 
     def __len__(self):
         return len(self.image_ids)
@@ -86,20 +96,34 @@ class OxfordPetInferenceDataset(Dataset):
 
         image_path = os.path.join(self.data_dir, "images", image_id + ".jpg")
         image = Image.open(image_path).convert("RGB")
+        orig_w, orig_h = image.size
         image_tensor = self.transform(image)
 
         if not self.load_gt:
-            return image_tensor, image_id
+            return image_tensor, image_id, torch.tensor([orig_h, orig_w])
 
         mask_path = os.path.join(
             self.data_dir, "annotations", "trimaps", image_id + ".png"
         )
-        mask = Image.open(mask_path).resize((256, 256), resample=Image.NEAREST)
+        mask = Image.open(mask_path).resize(INPUT_SIZE, resample=Image.NEAREST)
         mask_array = np.array(mask)
         binary_mask = np.zeros_like(mask_array, dtype=np.float32)
         binary_mask[mask_array == 1] = 1.0
+        binary_mask = center_crop_mask(binary_mask, TARGET_SIZE[0], TARGET_SIZE[1])
         mask_tensor = torch.from_numpy(binary_mask).unsqueeze(0)
-        return image_tensor, image_id, mask_tensor
+        return image_tensor, image_id, mask_tensor, torch.tensor([orig_h, orig_w])
+
+
+def verify_unet_output_shape(model, device):
+    with torch.no_grad():
+        dummy = torch.zeros(1, 3, INPUT_SIZE[0], INPUT_SIZE[1], device=device)
+        out = model(dummy)
+    expected = TARGET_SIZE
+    actual = tuple(out.shape[-2:])
+    if actual != expected:
+        raise ValueError(
+            f"UNet output shape mismatch. Expected {expected}, got {actual}."
+        )
 
 
 def validate_submission_rows(rows, expected_ids):
@@ -164,6 +188,9 @@ def run_inference(args):
     model.load_state_dict(state_dict)
     model.eval()
 
+    if model_type == "UNet":
+        verify_unet_output_shape(model, device)
+
     image_ids, split_path = load_image_ids(
         data_dir=data_dir,
         split_file=args.split_file,
@@ -191,10 +218,10 @@ def run_inference(args):
     with torch.no_grad():
         for batch in tqdm(test_loader, desc="Inference"):
             if gt_available:
-                images, batch_image_ids, gt_masks = batch
+                images, batch_image_ids, gt_masks, orig_sizes = batch
                 gt_masks = gt_masks.to(device)
             else:
-                images, batch_image_ids = batch
+                images, batch_image_ids, orig_sizes = batch
                 gt_masks = None
 
             images = images.to(device)
@@ -212,7 +239,15 @@ def run_inference(args):
 
             for idx, (pred, image_id) in enumerate(zip(preds_np, batch_image_ids)):
                 binary_mask = pred.squeeze(0).astype(np.uint8)
-                encoded_mask = rle_encode(binary_mask)
+
+                # Kaggle evaluates masks in each test image's original resolution.
+                orig_h = int(orig_sizes[idx, 0].item())
+                orig_w = int(orig_sizes[idx, 1].item())
+                mask_img = Image.fromarray((binary_mask * 255).astype(np.uint8))
+                mask_img = mask_img.resize((orig_w, orig_h), resample=Image.NEAREST)
+                binary_mask_for_submit = (np.array(mask_img) > 127).astype(np.uint8)
+
+                encoded_mask = rle_encode(binary_mask_for_submit)
                 submissions.append((image_id, encoded_mask))
 
                 if len(vis_buffer) < num_vis:
@@ -239,6 +274,8 @@ def run_inference(args):
     print(f"Total test images: {len(image_ids)}")
     print(f"Submission saved to: {submission_path}")
     print(f"Visualization samples showed: {len(vis_buffer)}")
+    if model_type == "UNet":
+        print(f"UNet shape check: input {INPUT_SIZE} -> output {TARGET_SIZE} (PASSED)")
 
     if issues:
         print("Kaggle format check: FAILED")

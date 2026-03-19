@@ -30,23 +30,38 @@ class UNet(nn.Module):
 
         self.output = nn.Conv2d(64, out_channels, kernel_size=1)
 
-        pass
+    @staticmethod
+    def _center_crop(skip, target):
+        _, _, h, w = skip.shape
+        _, _, th, tw = target.shape
+        dh = (h - th) // 2
+        dw = (w - tw) // 2
+        return skip[:, :, dh : dh + th, dw : dw + tw]
 
     def forward(self, x):
-        # TODO: 定義前向傳播邏輯 (記得處理 Skip connections)
+        # Paper-style U-Net: valid conv shrinks feature maps, so skip maps need center crop.
         l1 = self.left1(x)
         l2 = self.left2(self.pool(l1))
         l3 = self.left3(self.pool(l2))
         l4 = self.left4(self.pool(l3))
         b = self.button(self.pool(l4))
+
         r1 = self.right1_conv(b)
-        r1 = self.right1(torch.cat([r1, l4], dim=1))
+        l4_crop = self._center_crop(l4, r1)
+        r1 = self.right1(torch.cat([r1, l4_crop], dim=1))
+
         r2 = self.right2_conv(r1)
-        r2 = self.right2(torch.cat([r2, l3], dim=1))
+        l3_crop = self._center_crop(l3, r2)
+        r2 = self.right2(torch.cat([r2, l3_crop], dim=1))
+
         r3 = self.right3_conv(r2)
-        r3 = self.right3(torch.cat([r3, l2], dim=1))
+        l2_crop = self._center_crop(l2, r3)
+        r3 = self.right3(torch.cat([r3, l2_crop], dim=1))
+
         r4 = self.right4_conv(r3)
-        r4 = self.right4(torch.cat([r4, l1], dim=1))
+        l1_crop = self._center_crop(l1, r4)
+        r4 = self.right4(torch.cat([r4, l1_crop], dim=1))
+
         output = self.output(r4)
         return output
 
@@ -55,11 +70,9 @@ class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(DoubleConv, self).__init__()
         self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=0),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=0),
             nn.ReLU(inplace=True),
         )
 

@@ -6,6 +6,17 @@ from torch.utils.data import Dataset
 import torchvision.transforms as T
 
 
+INPUT_SIZE = (572, 572)
+TARGET_SIZE = (388, 388)
+
+
+def center_crop_mask(mask: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
+    h, w = mask.shape
+    top = (h - target_h) // 2
+    left = (w - target_w) // 2
+    return mask[top : top + target_h, left : left + target_w]
+
+
 class OxfordPetDataset(Dataset):
     def __init__(self, data_dir, split_type, transform=None):
         self.data_dir = os.path.abspath(data_dir)
@@ -18,7 +29,7 @@ class OxfordPetDataset(Dataset):
         with open(split_file, "r") as f:
             self.names = [line.strip() for line in f.readlines()]
 
-        self.transform = transform or T.Compose([T.Resize((256, 256)), T.ToTensor()])
+        self.transform = transform or T.Compose([T.Resize(INPUT_SIZE), T.ToTensor()])
 
     def __len__(self):
         return len(self.names)
@@ -39,10 +50,11 @@ class OxfordPetDataset(Dataset):
             return image_tensor, fileName
 
         maskPath = os.path.join(self.data_dir, "annotations/trimaps", fileName + ".png")
-        mask = Image.open(maskPath).resize((256, 256), resample=Image.NEAREST)
+        mask = Image.open(maskPath).resize(INPUT_SIZE, resample=Image.NEAREST)
         mask_array = np.array(mask)
         binary_mask = np.zeros_like(mask_array, dtype=np.float32)
         binary_mask[mask_array == 1] = 1.0
+        binary_mask = center_crop_mask(binary_mask, TARGET_SIZE[0], TARGET_SIZE[1])
 
         mask_tensor = torch.from_numpy(binary_mask).unsqueeze(0)  # [1, H, W]
         return image_tensor, mask_tensor
