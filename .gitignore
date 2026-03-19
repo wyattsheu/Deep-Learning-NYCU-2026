@@ -26,6 +26,7 @@ env/
 # 1. 忽略下載的巨大資料集
 Lab2/dataset/oxford-iiit-pet
 data/
+lab2/submission.csv
 
 # 2. 忽略訓練出來的超大模型權重檔 (Models)
 Lab2/saved_models/

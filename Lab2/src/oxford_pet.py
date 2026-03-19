@@ -35,7 +35,7 @@ class OxfordPetDataset(Dataset):
         image = Image.open(imgPath).convert("RGB")
         image_tensor = self.transform(image)
 
-        if self.split_type == "test":
+        if self.split_type.startswith("test"):
             return image_tensor, fileName
 
         maskPath = os.path.join(self.data_dir, "annotations/trimaps", fileName + ".png")
