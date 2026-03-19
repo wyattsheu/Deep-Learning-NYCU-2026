@@ -1,4 +1,5 @@
 import os
+from contextlib import nullcontext
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -58,7 +59,7 @@ def train():
 
     if hasattr(torch, "compile"):
         try:
-            model = torch.compile(model)
+            model = torch.compile(model, mode="reduce-overhead")
             print("torch.compile enabled")
         except Exception as e:
             print(f"torch.compile skipped: {e}")
@@ -69,7 +70,13 @@ def train():
     CrossEntropy_Loss = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=Learning_rate)
     amp_enabled = use_cuda
-    scaler = torch.cuda.amp.GradScaler(enabled=amp_enabled)
+    if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+        try:
+            scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
+        except TypeError:
+            scaler = torch.amp.GradScaler(enabled=amp_enabled)
+    else:
+        scaler = torch.cuda.amp.GradScaler(enabled=amp_enabled)
 
     save_dir = os.path.join(project_root, "saved_models")
     os.makedirs(save_dir, exist_ok=True)
@@ -86,7 +93,14 @@ def train():
             mask = mask.to(device, non_blocking=use_cuda)
 
             optimizer.zero_grad(set_to_none=True)
-            with torch.cuda.amp.autocast(enabled=amp_enabled):
+            if amp_enabled and hasattr(torch, "amp") and hasattr(torch.amp, "autocast"):
+                autocast_context = torch.amp.autocast(device_type="cuda", enabled=True)
+            elif amp_enabled:
+                autocast_context = torch.cuda.amp.autocast(enabled=True)
+            else:
+                autocast_context = nullcontext()
+
+            with autocast_context:
                 out = model(image)
                 loss = CrossEntropy_Loss(out, mask)
 
