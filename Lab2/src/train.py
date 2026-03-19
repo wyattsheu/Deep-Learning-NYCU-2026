@@ -31,31 +31,45 @@ def train():
     train_dataset = OxfordPetDataset(data_dir, split_type="train")
     val_dataset = OxfordPetDataset(data_dir, split_type="val")
 
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=Batch_size,
-        shuffle=True,
-        num_workers=2,  # 開啟多執行緒幫忙搬資料 (Colab 免費版建議設 2)
-        pin_memory=True,  # 讓資料直通 GPU 記憶體，傳輸更快
-    )
-    val_loader = DataLoader(val_dataset, batch_size=Batch_size, shuffle=False)
-
     device = torch.device(
         "cuda"
         if torch.cuda.is_available()
         else "mps" if torch.backends.mps.is_available() else "cpu"
     )
+    use_cuda = device.type == "cuda"
+
+    # Fixed-size image training can benefit from cuDNN autotuner on CUDA.
+    if use_cuda:
+        torch.backends.cudnn.benchmark = True
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=Batch_size,
+        shuffle=True,
+        num_workers=2,  # 開啟多執行緒幫忙搬資料 (Colab 免費版建議設 2)
+        pin_memory=use_cuda,  # 僅 CUDA 啟用 pin_memory；MPS/CPU 不需要
+    )
+    val_loader = DataLoader(val_dataset, batch_size=Batch_size, shuffle=False)
 
     if modlle_type == "UNet":
         model = UNet().to(device)
     else:
         model = ResNet34_UNet().to(device)
 
+    if hasattr(torch, "compile"):
+        try:
+            model = torch.compile(model)
+            print("torch.compile enabled")
+        except Exception as e:
+            print(f"torch.compile skipped: {e}")
+
     print(f"device: {device}")
     print(f"training by {modlle_type} model")
 
     CrossEntropy_Loss = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=Learning_rate)
+    amp_enabled = use_cuda
+    scaler = torch.amp.GradScaler(enabled=amp_enabled)
 
     save_dir = os.path.join(project_root, "saved_models")
     os.makedirs(save_dir, exist_ok=True)
@@ -68,14 +82,17 @@ def train():
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{Epochs}")
 
         for image, mask in progress_bar:
-            image = image.to(device)
-            mask = mask.to(device)
+            image = image.to(device, non_blocking=use_cuda)
+            mask = mask.to(device, non_blocking=use_cuda)
 
-            optimizer.zero_grad()
-            out = model(image)
-            loss = CrossEntropy_Loss(out, mask)
-            loss.backward()
-            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            with torch.amp.autocast(enabled=amp_enabled):
+                out = model(image)
+                loss = CrossEntropy_Loss(out, mask)
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             loss_temp += loss.item()
             progress_bar.set_postfix({"Loss": f"{loss.item():.4f}"})
