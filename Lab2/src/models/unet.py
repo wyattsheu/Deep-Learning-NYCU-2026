@@ -22,13 +22,13 @@ class UNet(nn.Module):
 
         self.right1_conv = ConvTranspose2d(1024, 512, kernel_size=2, stride=2)
         self.right1 = DoubleConv(1024, 512)
-        
+
         self.right2_conv = ConvTranspose2d(512, 256, kernel_size=2, stride=2)
         self.right2 = DoubleConv(512, 256)
-        
+
         self.right3_conv = ConvTranspose2d(256, 128, kernel_size=2, stride=2)
         self.right3 = DoubleConv(256, 128)
-        
+
         self.right4_conv = ConvTranspose2d(128, 64, kernel_size=2, stride=2)
         self.right4 = DoubleConv(128, 64)
 
@@ -43,26 +43,28 @@ class UNet(nn.Module):
 
         r1 = self.right1_conv(b)
         # 強制把 r1 的長寬縮放成跟 l4 一樣
-        if r1.shape != l4.shape:
-            r1 = F.interpolate(r1, size=l4.shape[2:], mode="bilinear", align_corners=False)
+
+        r1 = F.interpolate(r1, size=l4.shape[2:], mode="bilinear", align_corners=False)
         r1 = self.right1(torch.cat([r1, l4], dim=1))
 
         r2 = self.right2_conv(r1)
         # 強制把 r2 的長寬縮放成跟 l3 一樣
-        if r2.shape != l3.shape:
-            r2 = F.interpolate(r2, size=l3.shape[2:], mode="bilinear", align_corners=False)
+
+        r2 = F.interpolate(r2, size=l3.shape[2:], mode="bilinear", align_corners=False)
         r2 = self.right2(torch.cat([r2, l3], dim=1))
 
         r3 = self.right3_conv(r2)
         # 強制把 r3 的長寬縮放成跟 l2 一樣
-        if r3.shape != l2.shape:
-            r3 = F.interpolate(r3, size=l2.shape[2:], mode="bilinear", align_corners=False)
+
+        r3 = F.interpolate(r3, size=l2.shape[2:], mode="bilinear", align_corners=False)
         r3 = self.right3(torch.cat([r3, l2], dim=1))
 
         r4 = self.right4_conv(r3)
         # 強制把 r4 的長寬縮放成跟 l1 一樣
         if r4.shape != l1.shape:
-            r4 = F.interpolate(r4, size=l1.shape[2:], mode="bilinear", align_corners=False)
+            r4 = F.interpolate(
+                r4, size=l1.shape[2:], mode="bilinear", align_corners=False
+            )
         r4 = self.right4(torch.cat([r4, l1], dim=1))
 
         output = self.output(r4)

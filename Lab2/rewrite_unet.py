@@ -1,4 +1,5 @@
 import os
+
 content = """import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -86,5 +87,7 @@ class DoubleConv(nn.Module):
         return self.double_conv(x)
 """
 
-with open("/Users/wyattsheu/Downloads/Deep-Learning-NYCU-2026/Lab2/src/models/unet.py", "w") as f:
+with open(
+    "/Users/wyattsheu/Downloads/Deep-Learning-NYCU-2026/Lab2/src/models/unet.py", "w"
+) as f:
     f.write(content)
