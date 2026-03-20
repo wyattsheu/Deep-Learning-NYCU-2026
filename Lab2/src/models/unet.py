@@ -61,10 +61,8 @@ class UNet(nn.Module):
 
         r4 = self.right4_conv(r3)
         # 強制把 r4 的長寬縮放成跟 l1 一樣
-        if r4.shape != l1.shape:
-            r4 = F.interpolate(
-                r4, size=l1.shape[2:], mode="bilinear", align_corners=False
-            )
+
+        r4 = F.interpolate(r4, size=l1.shape[2:], mode="bilinear", align_corners=False)
         r4 = self.right4(torch.cat([r4, l1], dim=1))
 
         output = self.output(r4)
